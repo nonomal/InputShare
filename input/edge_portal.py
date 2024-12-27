@@ -3,12 +3,12 @@ import threading
 import pynput
 
 from typing import Callable
-from server.reporter_receiver import DevicePosition, append_edge_toggling_callback
+from server.reporter_receiver import DevicePosition
 from utils import screen_size
 from utils.config_manager import get_config
 from utils.logger import LOGGER, LogType
 
-EDGE_PORTAL_LOOP_INTERVAL_SEC = 1 / 250
+EDGE_PORTAL_LOOP_INTERVAL_SEC = 1 / 1000
 
 screen_width, screen_height = screen_size()
 mouse_controller = pynput.mouse.Controller()
@@ -16,6 +16,14 @@ pause_event = threading.Event()
 close_event = threading.Event()
 pause_edge_toggling_event = threading.Event()
 edge_portal_passing_event = threading.Event()
+
+edge_toggling_callbacks = []
+def append_edge_toggling_callback(callback: Callable):
+    global edge_toggling_callbacks
+    edge_toggling_callbacks.append(callback)
+def call_edge_toggling_callbacks():
+    global edge_toggling_callbacks
+    for callback in edge_toggling_callbacks: callback()
 
 config = get_config()
 
@@ -36,18 +44,27 @@ def resume_edge_toggling():
     pause_edge_toggling_event.clear()
 
 def create_edge_portal():
-    from input.controller import schedule_toggle
+    from input.controller import schedule_toggle as main_schedule_toggle
 
     def move_mouse_to_edge():
         nonlocal x, y
+        SIDE_MARGIN = 2
         if pause_event.is_set() or pause_edge_toggling_event.is_set(): return
-        if   is_device_at_right : mouse_controller.position = (screen_width - 2, y)
-        elif is_device_at_left  : mouse_controller.position = (2, y)
-        elif is_device_at_bottom: mouse_controller.position = (x, screen_height - 2)
+        if   is_device_at_right : mouse_controller.position = (screen_width - SIDE_MARGIN, y)
+        elif is_device_at_left  : mouse_controller.position = (SIDE_MARGIN, y)
+        elif is_device_at_top   : mouse_controller.position = (x, SIDE_MARGIN)
+        elif is_device_at_bottom: mouse_controller.position = (x, screen_height - SIDE_MARGIN)
     append_edge_toggling_callback(move_mouse_to_edge)
 
     while not close_event.is_set():
-        x, y = mouse_controller.position
+        temp_pos = mouse_controller.position
+        if temp_pos == None:
+            # since the value of `mouse_controller.position` may be None sometimes,
+            # make it a check here.
+            # see this issue: https://github.com/moses-palmer/pynput/issues/559
+            time.sleep(EDGE_PORTAL_LOOP_INTERVAL_SEC)
+            continue
+        x, y = temp_pos
         is_at_left_side = x <= 0
         is_at_right_side = x >= screen_width - 1
         is_at_top_side = y <= 0
@@ -62,7 +79,7 @@ def create_edge_portal():
                (is_device_at_left   and is_at_left_side  and is_y_at_target_range) or\
                (is_device_at_top    and is_at_top_side)    or\
                (is_device_at_bottom and is_at_bottom_side):
-                schedule_toggle()
+                main_schedule_toggle(True)
         else:
             if is_at_left_side or is_at_right_side or is_at_top_side or is_at_bottom_side:
                 edge_portal_passing_event.set()

@@ -32,7 +32,7 @@ def check_event(root: ctk.CTk, toplevel: ctk.CTkToplevel):
         LOGGER.write(LogType.Info, "Fullscreen mask exited.")
         root.quit()
 
-    interval_ms = int(1000 / 30)
+    interval_ms = 2 # 500 times per second
     root.after(interval_ms, check_event, root, toplevel)
 
 def open_mask_window():

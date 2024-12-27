@@ -20,14 +20,6 @@ SERVER_EVENT_TOGGLE    = 0x01
 SERVER_EVENT_EDGE_TOGGLING_PAUSE  = 0x02
 SERVER_EVENT_EDGE_TOGGLING_RESUME = 0x03
 
-edge_toggling_callbacks = []
-def append_edge_toggling_callback(callback: Callable):
-    global edge_toggling_callbacks
-    edge_toggling_callbacks.append(callback)
-def call_edge_toggling_callbacks():
-    global edge_toggling_callbacks
-    for callback in edge_toggling_callbacks: callback()
-
 class DevicePosition:
     TOP    = "top"
     RIGHT  = "right"
@@ -73,15 +65,19 @@ def start_server(device: AdbDevice) -> Exception | None:
         return e
 
 def server_receiver_factory() -> Callable[[], None]:
-    from input.controller import schedule_toggle
-    from input.edge_portal import pause_edge_toggling, resume_edge_toggling
+    from input.controller import schedule_toggle as main_schedule_toggle
+    from input.edge_portal import pause_edge_toggling, resume_edge_toggling,\
+                                  call_edge_toggling_callbacks
+    from utils.config_manager import get_config
+    edge_toggling_enabled = get_config().edge_toggling
 
     def data_recv(client_socket: socket.socket):
         data = client_socket.recv(16)
         if len(data) > 0:
             event_type = data[0]
             if   event_type == SERVER_EVENT_KEEPALIVE: pass
-            elif event_type == SERVER_EVENT_TOGGLE   : schedule_toggle(); call_edge_toggling_callbacks()
+            elif event_type == SERVER_EVENT_TOGGLE and edge_toggling_enabled:
+                main_schedule_toggle(False); call_edge_toggling_callbacks()
             elif event_type == SERVER_EVENT_EDGE_TOGGLING_PAUSE : pause_edge_toggling()
             elif event_type == SERVER_EVENT_EDGE_TOGGLING_RESUME: resume_edge_toggling()
             else: LOGGER.write(LogType.Server, "Unexpected reporter event: " + str(data))

@@ -1,4 +1,5 @@
 import threading
+import time
 from pynput import keyboard, mouse
 from input import EXIT_KEY_COMBINATION, SWITCH_KEY_COMBINATION
 from scrcpy_client.clipboard_event import GetClipboardEvent, SetClipboardEvent
@@ -17,10 +18,23 @@ toggle_event = threading.Event()
 exit_event = threading.Event()
 main_errno: Exception | None = None
 
-def schedule_toggle():
-    global toggle_event
-    keyboard_controller.release(keyboard.Key.ctrl)
-    keyboard_controller.release(keyboard.Key.alt)
+last_toggling_time  = time.perf_counter()
+DEBOUNCING_DURATION = 0.25
+def schedule_toggle(force: bool | None = None):
+    global toggle_event, is_redirecting, last_toggling_time
+    current_time = time.perf_counter()
+    if current_time - last_toggling_time < DEBOUNCING_DURATION:
+        print("debounced, current, ", current_time, ' last: ', last_toggling_time)
+        return
+    last_toggling_time = current_time
+
+    if force is None:
+        # triggered by hotkey
+        keyboard_controller.release(keyboard.Key.ctrl)
+        keyboard_controller.release(keyboard.Key.alt)
+    # print("force: ", force)
+    # print("new redirecting: ", force if force is not None else not is_redirecting)
+    is_redirecting = force if force is not None else not is_redirecting
     toggle_event.set()
 
 def schedule_exit(errno: Exception | None = None):
@@ -92,7 +106,18 @@ def main_loop(
 ) -> Exception | None:
     global is_redirecting, keyboard_listener, main_errno, toggle_event
 
-    def toggle_redirecting_state(is_redirecting: bool):
+    def before_toggle(is_redirecting: bool):
+        if is_redirecting:
+            last_received = ReceivedClipboardText.read()
+            current_clipboard_content = Clipboard.safe_paste()
+            if exit_event.is_set(): return
+            if not get_config().sync_clipboard: return
+            if current_clipboard_content is None: return
+            if last_received is not None and\
+               last_received == current_clipboard_content: return
+            return send_data(SetClipboardEvent(current_clipboard_content).serialize())
+
+    def after_toggle(is_redirecting: bool):
         nonlocal show_mask, hide_mask,\
             start_edge_portal, pause_edge_portal
         if is_redirecting:
@@ -103,17 +128,6 @@ def main_loop(
             send_data(KeyEmptyEvent().serialize())
             hide_mask(); pause_edge_portal()
             LOGGER.write(LogType.Info, "Input redirecting disabled.")
-
-    def toggle_callback(is_redirecting: bool):
-        if is_redirecting:
-            last_received = ReceivedClipboardText.read()
-            current_clipboard_content = Clipboard.safe_paste()
-            if exit_event.is_set(): return
-            if not get_config().sync_clipboard: return
-            if current_clipboard_content is None: return
-            if last_received is not None and\
-               last_received == current_clipboard_content: return
-            return send_data(SetClipboardEvent(current_clipboard_content).serialize())
 
     main_errno = send_data(GetClipboardEvent().serialize()) # start server clipboard sync
     show_mask, hide_mask, exit_mask = mask_thread_factory()
@@ -127,7 +141,7 @@ def main_loop(
     )
     mouse_listener.start()
     while not exit_event.is_set() and main_errno is None:
-        if (res := toggle_redirecting_state(is_redirecting)) is not None:
+        if (res := after_toggle(is_redirecting)) is not None:
             main_errno = res; break
 
         keyboard_listener = keyboard.Listener(
@@ -137,9 +151,8 @@ def main_loop(
         )
         keyboard_listener.start()
         toggle_event.wait()
-        is_redirecting = not is_redirecting
-        toggle_callback(is_redirecting)
         toggle_event.clear()
+        before_toggle(is_redirecting)
         keyboard_listener.stop()
 
     mouse_listener.stop()
