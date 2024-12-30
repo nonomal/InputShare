@@ -24,16 +24,13 @@ def schedule_toggle(force: bool | None = None):
     global toggle_event, is_redirecting, last_toggling_time
     current_time = time.perf_counter()
     if current_time - last_toggling_time < DEBOUNCING_DURATION:
-        print("debounced, current, ", current_time, ' last: ', last_toggling_time)
-        return
+        LOGGER.write(LogType.Info, "Toggling debounced."); return
     last_toggling_time = current_time
 
     if force is None:
         # triggered by hotkey
         keyboard_controller.release(keyboard.Key.ctrl)
         keyboard_controller.release(keyboard.Key.alt)
-    # print("force: ", force)
-    # print("new redirecting: ", force if force is not None else not is_redirecting)
     is_redirecting = force if force is not None else not is_redirecting
     toggle_event.set()
 

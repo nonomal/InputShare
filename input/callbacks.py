@@ -125,53 +125,42 @@ def callback_context_wrapper(
                 res = send_data(key.serialize())
                 if res is not None: return res
 
-        # the most common mouse polling rate
-        DEFAULT_INTERVAL_SEC = 1 / 125
-        NO_MOVE_INTERVAL_SEC = 1 / 30
-        # the time factor that start to decrease `interval_sec`
-        NO_MOVE_FACTOR_SEC = 5
-        # send wakeup signal every X times `wakeup_counter` increases
-        WAKEUP_COUNT_MODULO = int((1 / NO_MOVE_INTERVAL_SEC) * 2)
+        INTERVAL_SEC = 1 / 125 # the most common mouse polling rate
+        LOOP_FREQUENCY = int(1 / (INTERVAL_SEC * 2))
+        WAKEUP_INTERVAL_SEC = 5
+        WAKEUP_COUNT_MODULO = LOOP_FREQUENCY * WAKEUP_INTERVAL_SEC
 
-        interval_sec = DEFAULT_INTERVAL_SEC
-        no_move_timer = None
-        start_time = time.perf_counter()
+        no_move_timer = time.perf_counter() 
         while True:
-            # --- keep same call interval ---
-            current_time = time.perf_counter()
-            elapsed_time = current_time - start_time
-            if elapsed_time < interval_sec:
-                # prevent high CPU usage
-                time.sleep(interval_sec)
-                continue
-            start_time += interval_sec
-            # --- keep same call interval ---
-
-            if not movement_queue.empty():
-                # if queue is not empty, send the movement event
-                no_move_timer = None
-                interval_sec = DEFAULT_INTERVAL_SEC
-                dx, dy = movement_queue.get()
+            try:# adapt different polling rates.
+                # when mouse moves, the loop frequency equals polling rate;
+                # when no mouse movement, `movement_queue.get` throws error,
+                # and the loop frequency is `1 / (INTERVAL_SEC * 2)`.
+                dx, dy = movement_queue.get(block=True, timeout=INTERVAL_SEC)
                 event = MouseMoveEvent(dx, dy, mouse_button_state)
-                res = send_data(event.serialize())
-                if res is not None: schedule_exit(res); break
+                if (res := send_data(event.serialize())) is not None:
+                    schedule_exit(res); break
+                no_move_timer = None
                 continue
+            except: pass
 
-            if no_move_timer is None: no_move_timer = current_time
-            if current_time - no_move_timer > NO_MOVE_FACTOR_SEC:
-                interval_sec = NO_MOVE_INTERVAL_SEC
+            # when there is no mouse movement for `WAKEUP_INTERVAL_SEC * 2` seconds
+            # and the `keep_wakeup` is True,
+            # send wakeup signal every `WAKEUP_INTERVAL_SEC` second.
+            current_time = time.perf_counter()
+            if no_move_timer is None: no_move_timer = current_time 
+            if current_time - no_move_timer > WAKEUP_INTERVAL_SEC:
                 if not get_config().keep_wakeup: continue
                 wakeup_counter += 1
                 if wakeup_counter % WAKEUP_COUNT_MODULO or manual_device_sleep: continue
                 if (res := send_wakeup_signal()) is not None:
                     schedule_exit(res); break
                 continue
-            # when there is no mouse movement within `NO_MOVE_FACTOR_SEC` seconds,
-            # send zero movement mouse event
+            # when there is no mouse movement within `WAKEUP_INTERVAL_SEC * 2` seconds,
+            # send zero movement mouse event.
             event = MouseMoveEvent(0, 0, mouse_button_state)
             if (res := send_data(event.serialize())) is not None:
                 schedule_exit(res); break
-
     threading.Thread(target=mouse_movement_sender, daemon=True).start()
 
     def compute_mouse_pointer_diff(cur_x: int, cur_y: int) -> tuple[int, int] | None:
