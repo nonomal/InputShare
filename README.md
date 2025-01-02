@@ -5,7 +5,7 @@
     <a href="README_zh.md">中文介绍</a> | 
     <a href="https://bhznjns.github.io/InputShare/">Homepage</a> | 
     <a href="https://github.com/BHznJNs/InputShare/issues">Feedback</a> |
-    <a href="https://discord.gg/GcHPRR4K">Discord</a>
+    <a href="https://discord.gg/BwHCxUwnYw">Discord</a>
     <br />
     <br />
 </div>
