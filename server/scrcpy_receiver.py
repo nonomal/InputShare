@@ -11,13 +11,12 @@ from scrcpy_client.clipboard_event import GetClipboardEventResponse
 from utils import script_abs_path
 from utils.adb_controller import ADB_BIN_PATH, ADB_SERVER_PORT
 from utils.clipboard import Clipboard
-from utils.config_manager import get_config
 from utils.logger import LOGGER, LogType
+from utils.network import get_port
 
-SERVER_PORT = 1234
+SERVER_PORT = get_port("scrcpy_port", 1234)
 SERVER_EXECUTABLE_NAME = "scrcpy-server"
 
-class ADBConnectionError(Exception): pass
 class InvalidDummyByteException(Exception): pass
 
 def push_server(device: AdbDevice):
@@ -79,6 +78,8 @@ class ReceivedClipboardText:
             ReceivedClipboardText.text = new_text
 
 def server_receiver_factory(client_socket: socket.socket) -> Callable[[], None]:
+    from utils.config_manager import get_config
+
     def data_recv(client_socket: socket.socket) -> bool:
         data = client_socket.recv(4096)
         if len(data) > 0:

@@ -3,9 +3,8 @@ import sys, os
 import json
 
 from dataclasses import asdict, dataclass, fields
-from server.reporter_receiver import DevicePosition
-from utils import script_abs_path
-from utils.i18n import I18n, ENGLISH_LANGUAGE
+from utils import DevicePosition, ENGLISH_LANGUAGE,\
+                  current_language_code, script_abs_path
 
 DEFAULT_CONFIG_FILE_NAME = "config.json"
 
@@ -23,7 +22,7 @@ class ConfigFile:
     device_position: str = DevicePosition.RIGHT
     trigger_margin: int = 80
     keep_wakeup: bool = False
-    language: str = I18n.language_code() or ENGLISH_LANGUAGE
+    language: str = current_language_code() or ENGLISH_LANGUAGE
 
 class ConfigManager:
     path: str
@@ -80,4 +79,3 @@ def get_config_manager() -> ConfigManager:
 def get_config() -> ConfigFile:
     manager = get_config_manager()
     return manager.config
-

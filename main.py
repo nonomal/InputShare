@@ -4,7 +4,7 @@ from typing import Callable
 
 from adbutils import AdbInstallError
 from multiprocessing import freeze_support
-from server import deploy_reporter_server, deploy_scrcpy_server, scrcpy_receiver, reporter_receiver
+from server import deploy_reporter_server, deploy_scrcpy_server, ADBConnectionError, scrcpy_receiver, reporter_receiver
 from input.callbacks import callback_context_wrapper
 from ui.connecting_window import open_connecting_window
 from ui.tray import tray_thread_factory
@@ -19,7 +19,7 @@ def close_notification_resolver(errno: Exception | None):
     i18n = get_i18n()
     match errno:
         case None: pass
-        case scrcpy_receiver.ADBConnectionError():
+        case ADBConnectionError():
             close_notification = Notification(
                 i18n(["ConnectionError", "连接错误"]),
                 i18n(["Wired connection failed, please check if the device is connected correctly.", "有线连接失败，请检查是否正确连接设备。"]))
@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     close_tray = tray_thread_factory(scrcpy_client_socket)
     callbacks  = callback_context_wrapper(scrcpy_client_socket)
-    
+
     from input.controller import main_loop
     main_errno = main_loop(*callbacks)
 

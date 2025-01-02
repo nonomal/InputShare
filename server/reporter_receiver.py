@@ -1,18 +1,19 @@
-from pathlib import Path
 import socket
 import threading
 import time
+from pathlib import Path
 from typing import Callable
 
-from adbutils import AdbDevice, AdbInstallError, AdbTimeout
-from utils import script_abs_path
-from utils.logger import LOGGER, LogType, unreachable
+from adbutils import AdbDevice
+from utils import DevicePosition, script_abs_path
+from utils.logger import LOGGER, LogType
+from utils.network import get_port
 
 PACKAGE_NAME = "com.bhznjns.inputsharereporter"
 PACKAGE_VERSION = "1.0.2"
 ENTRY_ACTIVITY_NAME = ".MainActivity"
 SERVER_EXECUTABLE_NAME = "reporter.apk"
-SERVER_PORT = 61625
+SERVER_PORT = get_port("reporter_port", 61625)
 SERVER_RETRY_INTERVAL = 2
 
 SERVER_EVENT_KEEPALIVE = 0x00
@@ -20,22 +21,9 @@ SERVER_EVENT_TOGGLE    = 0x01
 SERVER_EVENT_EDGE_TOGGLING_PAUSE  = 0x02
 SERVER_EVENT_EDGE_TOGGLING_RESUME = 0x03
 
-class DevicePosition:
-    TOP    = "top"
-    RIGHT  = "right"
-    BOTTOM = "bottom"
-    LEFT   = "left"
-
-    @staticmethod
-    def parse(pos: str) -> str:
-        match pos:
-            case DevicePosition.TOP    : return "down"
-            case DevicePosition.RIGHT  : return "left"
-            case DevicePosition.BOTTOM : return "up"
-            case DevicePosition.LEFT   : return "right"
-            case _                     : return "left"
-
 def install_server(device: AdbDevice) -> Exception | None:
+    from adbutils import AdbInstallError
+
     script_path = script_abs_path(__file__)
     server_binary_path = Path.joinpath(script_path, SERVER_EXECUTABLE_NAME)
     try:
@@ -44,10 +32,12 @@ def install_server(device: AdbDevice) -> Exception | None:
         LOGGER.write(LogType.Error, "Reporter install error: " + str(e))
         return e
     except Exception as e:
+        from utils.logger import unreachable
         unreachable()
         return e
 
 def start_server(device: AdbDevice) -> Exception | None:
+    from adbutils import AdbTimeout
     from utils.config_manager import get_config
 
     try:
@@ -58,7 +48,6 @@ def start_server(device: AdbDevice) -> Exception | None:
         LOGGER.write(LogType.Server, "Reporter server is not running, try to start...")
         config_position = get_config().device_position
         param_direction = DevicePosition.parse(config_position)
-        print("param_direction: ", param_direction)
         device.shell(f"am start -n {PACKAGE_NAME}/{PACKAGE_NAME + ENTRY_ACTIVITY_NAME} -e \"direction\" \"{param_direction}\"")
     except AdbTimeout as e:
         LOGGER.write(LogType.Server, "Start reporter server timeout.")

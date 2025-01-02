@@ -1,3 +1,4 @@
+import locale
 import time
 import screeninfo
 
@@ -13,6 +14,30 @@ def screen_size() -> tuple[int, int]:
 
 def script_abs_path(_file: str) -> Path:
     return Path(_file).resolve().parent
+
+ENGLISH_LANGUAGE = "en_"
+CHINESE_LANGUAGE = "zh_"
+def current_language_code():
+    code = locale.getdefaultlocale()[0]
+    if code is None: return None
+    if code.startswith(ENGLISH_LANGUAGE): return ENGLISH_LANGUAGE
+    if code.startswith(CHINESE_LANGUAGE): return CHINESE_LANGUAGE
+    return code
+
+class DevicePosition:
+    TOP    = "top"
+    RIGHT  = "right"
+    BOTTOM = "bottom"
+    LEFT   = "left"
+
+    @staticmethod
+    def parse(pos: str) -> str:
+        match pos:
+            case DevicePosition.TOP    : return "down"
+            case DevicePosition.RIGHT  : return "left"
+            case DevicePosition.BOTTOM : return "up"
+            case DevicePosition.LEFT   : return "right"
+            case _                     : return "left"
 
 class TimeCounter:
     __count: int = 0

@@ -4,11 +4,13 @@ from server import scrcpy_receiver, reporter_receiver
 from utils.adb_controller import get_adb_client
 from utils.logger import LOGGER, LogType
 
+class ADBConnectionError(Exception): pass
+
 def deploy_scrcpy_server() -> tuple[subprocess.Popen, socket.socket] | Exception:
     adb_client = get_adb_client()
     device_list = adb_client.device_list()
     if len(device_list) == 0:
-        return scrcpy_receiver.ADBConnectionError()
+        return ADBConnectionError()
 
     primary_device = device_list[0]
     scrcpy_receiver.push_server(primary_device)
@@ -28,7 +30,7 @@ def deploy_reporter_server() -> Exception | None:
     adb_client = get_adb_client()
     device_list = adb_client.device_list()
     if len(device_list) == 0:
-        return scrcpy_receiver.ADBConnectionError()
+        return ADBConnectionError()
 
     primary_device = device_list[0]
     primary_device.forward(f"tcp:{reporter_receiver.SERVER_PORT}", f"tcp:{reporter_receiver.SERVER_PORT}")
